@@ -12,8 +12,6 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import javafx.application.Platform;
-import javafx.scene.text.Text;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
@@ -80,6 +78,40 @@ public class SimpleCipherAES {
      */
     public void processFile(File file, byte[] key, CipherType type,
             SimpleCipherDriverGUI driver){
+        //Delete old encrypted/decrypted files
+        if (type == CipherType.ENCRYPT) {
+            try {
+                String fileName = file.getCanonicalPath();
+                String newName = fileName + ".enc";
+                File newFile = new File(newName);
+                if (newFile.exists()) {
+                    newFile.delete();
+                    driver.updateProgress("Old file deleted.");
+                }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        } else if (type == CipherType.DECRYPT) {
+            try {
+                //Remove ".enc" extension
+                String oldFilePath = file.getCanonicalPath();
+                String newFilePath = oldFilePath.substring(0, oldFilePath.length() - 4);
+                //Get original extension
+                int indexOfExtension = newFilePath.indexOf(".");
+                String extension = newFilePath.substring(indexOfExtension);
+                //Add " [decrypted]" just before the file's real extension
+                newFilePath = newFilePath.substring(0, indexOfExtension) + " [decrypted]"
+                        + extension;
+                File newFile = new File(newFilePath);
+                if (newFile.exists()) {
+                    newFile.delete();
+                    driver.updateProgress("Old file deleted.");
+                }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+        
         Thread fileProcess = new Thread(){
             @Override
             public void run() {
@@ -120,7 +152,7 @@ public class SimpleCipherAES {
                         int bytesRead = inputStream.read(bytes);
                         totalBytesRead += bytesRead;
 
-                        //Encrypt or decrypt file
+                        //Encrypt or decrypt byte array
                         if (type == CipherType.ENCRYPT) {
                             encryptAndSave(bytes, key, file);
                         } else if (type == CipherType.DECRYPT) {
@@ -166,9 +198,9 @@ public class SimpleCipherAES {
             cipher.init(Cipher.ENCRYPT_MODE, aesKey);
             //Encrypt all the file bytes
             encryptedBytes = cipher.doFinal(message);
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
-                IllegalBlockSizeException | BadPaddingException
-                ex) {
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException |
+                InvalidKeyException | IllegalBlockSizeException |
+                BadPaddingException ex) {
             ex.printStackTrace();
         }
         
@@ -222,6 +254,7 @@ public class SimpleCipherAES {
             //Remove ".enc" extension
             String oldFilePath = encryptedFile.getCanonicalPath();
             String newFilePath = oldFilePath.substring(0, oldFilePath.length()-4);
+            //Get original extension
             int indexOfExtension = newFilePath.indexOf(".");
             String extension = newFilePath.substring(indexOfExtension);
             //Add " [decrypted]" just before the file's real extension
