@@ -4,11 +4,14 @@ import simplecipheraes.SimpleCipherAES.CipherType;
 import java.io.File;
 import javafx.application.Application;
 import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextField;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
@@ -39,7 +42,7 @@ public class SimpleCipherDriverGUI extends Application {
         encrypt.setOnAction((ActionEvent event) -> {
             byte[] key = cipher.hashKey(textField.getText());
             if (key == null) { //Prevent encrypting with blank key
-                //Do nothing
+                updateProgress("Please type in a password.");
             } else {
                 File file = openFileExplorer("Encrypt");
                 if (file == null) { //If something went wrong with fileChooser
@@ -54,7 +57,7 @@ public class SimpleCipherDriverGUI extends Application {
         decrypt.setOnAction((ActionEvent event) -> {
             byte[] key = cipher.hashKey(textField.getText());
             if (key == null) {
-                //Do nothing
+                updateProgress("Please type in a password.");
             } else {
                 File file = openFileExplorer("Decrypt");
                 if (file == null) {
@@ -64,6 +67,9 @@ public class SimpleCipherDriverGUI extends Application {
                 }
             }
         });
+        
+        addEnterListener(encrypt);
+        addEnterListener(decrypt);
         
         progress = new Text("Type in a password to encrypt or decrypt");
         Font font = new Font("vernanda", 16);
@@ -96,6 +102,24 @@ public class SimpleCipherDriverGUI extends Application {
     
     public static void main(String[] args) {
         launch(args);
+    }
+    
+    /**
+     * Adds a keyListener so that when Enter is pressed, it fires the button.
+     * 
+     * @param button
+     *          Button to which a keyListener is added.
+     */
+    private void addEnterListener(Button button) {
+        button.setOnKeyPressed(new EventHandler<KeyEvent>() {
+            @Override
+            public void handle(KeyEvent e) {
+                if (e.getCode() == KeyCode.ENTER) {
+                    button.fire();
+                    e.consume(); //Prevents further events from happening
+                }
+            }
+        });
     }
     
     /**
