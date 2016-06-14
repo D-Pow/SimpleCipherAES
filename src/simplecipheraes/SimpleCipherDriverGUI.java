@@ -22,8 +22,14 @@ import javafx.stage.Stage;
 import javax.swing.JFileChooser;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
+ * GUI Driver for the simple AES cipher.
+ * Includes a main GUI for typing in a password and selecting
+ * options to encrypt or decrypt files. A JFileChooser is used
+ * to select the user's file. A message is set below the buttons
+ * showing the progress of the user's command.
  *
  * @author dPow
  */
@@ -45,8 +51,8 @@ public class SimpleCipherDriverGUI extends Application {
                 updateProgress("Please type in a password.");
             } else {
                 File file = openFileExplorer("Encrypt");
-                if (file == null) { //If something went wrong with fileChooser
-                    //Do nothing
+                if (file == null) {
+                    updateProgress("Something went wrong with selecting your file.");
                 } else {
                     cipher.processFile(file, key, CipherType.ENCRYPT, this);
                 }
@@ -61,7 +67,7 @@ public class SimpleCipherDriverGUI extends Application {
             } else {
                 File file = openFileExplorer("Decrypt");
                 if (file == null) {
-                    //Do nothing
+                    updateProgress("Something went wrong with selecting your file.");
                 } else {
                     cipher.processFile(file, key, CipherType.DECRYPT, this);
                 }
@@ -159,6 +165,13 @@ public class SimpleCipherDriverGUI extends Application {
         
         //Allow the JFileChooser to see files and directories instead of only files
         fileChooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+        
+        //Set the decryption to only show ".enc" files
+        if (buttonText.equals("Decrypt")) {
+            String fileFilter = String.format("%10s", ".enc");
+            FileNameExtensionFilter filter = new FileNameExtensionFilter("Encrypted files" + fileFilter, "enc");
+            fileChooser.setFileFilter(filter);
+        }
         
         //Encrypt or decryptFile the selected file
         int fileChoice = fileChooser.showDialog(null, buttonText);

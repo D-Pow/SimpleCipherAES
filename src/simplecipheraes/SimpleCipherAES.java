@@ -20,6 +20,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
+ * This is an implementation of AES 128-bit encryption that
+ * encrypts and decrypts files using a JFileChooser.
+ * The key is made by a simple hash of a user-entered key.
+ * Any size file (even those >2GB) can be processed using this program.
  *
  * @author dPow
  */
