@@ -168,8 +168,7 @@ public class SimpleCipherDriverGUI extends Application {
         
         //Set the decryption to only show ".enc" files
         if (buttonText.equals("Decrypt")) {
-            String fileFilter = String.format("%10s", ".enc");
-            FileNameExtensionFilter filter = new FileNameExtensionFilter("Encrypted files" + fileFilter, "enc");
+            FileNameExtensionFilter filter = new FileNameExtensionFilter("Encrypted files (.enc)", "enc");
             fileChooser.setFileFilter(filter);
         }
         
