@@ -162,10 +162,10 @@ public class SimpleCipherAES {
                         } else if (type == CipherType.DECRYPT) {
                             decryptAndSave(bytes, key, file);
                         }
-
+                        
                         //Let the user know what's happening
                         driver.updateProgress(totalBytesRead, fileSize);
-                        System.out.println("check...");
+                        System.out.println(totalBytesRead + " completed so far.");
                         if (totalBytesRead == fileSize) {
                             System.out.println("Done!");
                             driver.updateProgress("File Completed!");

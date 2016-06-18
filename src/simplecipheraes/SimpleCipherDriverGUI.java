@@ -54,6 +54,12 @@ public class SimpleCipherDriverGUI extends Application {
                 if (file == null) {
                     updateProgress("Something went wrong with selecting your file.");
                 } else {
+                    //Remove password from text field to prevent people from peeking
+                    //over your shoulder
+                    textField.setText("");
+                    //Let user know the file is being loaded
+                    updateProgress("Loading...");
+                    //Process file
                     cipher.processFile(file, key, CipherType.ENCRYPT, this);
                 }
             }
@@ -69,6 +75,12 @@ public class SimpleCipherDriverGUI extends Application {
                 if (file == null) {
                     updateProgress("Something went wrong with selecting your file.");
                 } else {
+                    //Remove password from text field to prevent people from peeking
+                    //over your shoulder
+                    textField.setText("");
+                    //Let user know the file is being loaded
+                    updateProgress("Loading...");
+                    //Process file
                     cipher.processFile(file, key, CipherType.DECRYPT, this);
                 }
             }
@@ -188,31 +200,35 @@ public class SimpleCipherDriverGUI extends Application {
      * Updates the progress of the encryption/decryption, and displays
      * it on the screen.
      * 
-     * @param completed 
+     * @param completedSize 
      *          Number of bytes processed in the encryption/decryption
      *          methods
      * @param fileSize
      *          Size of the file, in bytes
      */
-    public void updateProgress(long completed, long fileSize) {
-        int orderOfMagnitude = 0;
+    public void updateProgress(double completedSize, double fileSize) {
+        double orderOfMagnitude;
         String suffix;
         if (fileSize > 1000000000) {
-            orderOfMagnitude = 1000000000; //Gigabyte
+            orderOfMagnitude = 1000000000.0; //Gigabyte
             suffix = "GB";
         } else if (fileSize > 1000000) {
-            orderOfMagnitude = 1000000; //Megabyte
+            orderOfMagnitude = 1000000.0; //Megabyte
             suffix = "MB";
         } else if (fileSize > 1000) {
-            orderOfMagnitude = 1000; //Kilobyte
+            orderOfMagnitude = 1000.0; //Kilobyte
             suffix = "KB";
         } else {
-            orderOfMagnitude = 1; //Byte
+            orderOfMagnitude = 1.0; //Byte
             suffix = "B";
         }
         
-        progress.setText("Running...\n" + completed/orderOfMagnitude + "/" +
-                fileSize/orderOfMagnitude + " " + suffix + " completed");
+        //Round numbers to the nearest hundredth
+        double completedSizeDisplayed = ((double)Math.round(completedSize/orderOfMagnitude*100))/100;
+        double fileSizeDisplayed = ((double)Math.round(fileSize/orderOfMagnitude*100))/100;
+        
+        progress.setText("Running...\n" + completedSizeDisplayed + "/" +
+                fileSizeDisplayed + " " + suffix + " completed");
     }
     
     /**
