@@ -108,7 +108,6 @@ public class SimpleCipherDriverGUI extends Application {
         stage.setWidth(400);
         stage.setHeight(400);
         stage.setResizable(false);
-        //stage.getIcons().add(new Image("/characterimages/DragonIcon.png"));
         
         stage.show();
     }
