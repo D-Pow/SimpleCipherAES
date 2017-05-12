@@ -9,7 +9,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.TextField;
+import javafx.scene.control.PasswordField;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
@@ -35,13 +35,19 @@ import javax.swing.filechooser.FileNameExtensionFilter;
  */
 public class SimpleCipherDriverGUI extends Application {
     Text progress;
+    String filePath;
+    
+    public SimpleCipherDriverGUI() {
+        //set initial file-open dialog to current directory
+        this.filePath = ".";
+    }
 
     @Override
     public void start(Stage stage) throws Exception {
         SimpleCipherAES cipher = new SimpleCipherAES();
         
         //Password field
-        TextField textField = new TextField();
+        PasswordField textField = new PasswordField();
         
         //Add buttons and their functions
         Button encrypt = new Button("Encrypt file");
@@ -148,7 +154,7 @@ public class SimpleCipherDriverGUI extends Application {
      *          File selected that will be encrypted or decrypted
      */
     public File openFileExplorer(String buttonText) {
-        JFileChooser fileChooser = new JFileChooser("."){
+        JFileChooser fileChooser = new JFileChooser(this.filePath){
             
             @Override
             public void approveSelection() {
@@ -188,6 +194,7 @@ public class SimpleCipherDriverGUI extends Application {
         if (fileChoice == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
             if (selectedFile.isFile()) {
+                this.filePath = selectedFile.getAbsolutePath();
                 return selectedFile;
             }
         }
