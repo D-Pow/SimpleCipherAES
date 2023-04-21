@@ -1,0 +1,17 @@
+# Build system, output, etc. files
+.gradle/
+gradle/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+build/
+
+# Temp app files
+*.log
+
+# IDE files
+**/*.iml
+**/.idea/
+**/*.sublime-*
+
+# OS files
+**/.DS_Store
