@@ -28,6 +28,14 @@ ext {
         osName = "osx";
     }
 
+
+    // Default formatting scheme for `jar`/`war` tasks: `<name>-<version>.<extension>`
+    // Note: "build" was only added before `archiveBaseName`, `archiveVersion`, etc. to distinguish global `ext` var from local `jar`/`war` var.
+    buildArchiveBaseName = rootProject.name.toLowerCase();  // Only the base `<name>` of the formatting scheme
+    buildArchiveVersion = "";  // Only the `<version>` portion of the formatting scheme
+    //buildArchiveFileName = "${buildArchiveBaseName}.jar";  // Full name of the generated .jar/.war archive, ignoring default formatting scheme
+
+
     /**
      * We need to download JavaFX manually because it requires OS-specific bindings that can't be packaged
      * in a .jar file (meaning we can't just add `org.openjfx` as a dependency solely, we need the .jar files from
@@ -161,10 +169,8 @@ jar {
      * This can be solved with
      */
 
-    // Default formatting scheme: `<name>-<version>.<extension>`
-    //archiveFileName = "my-app.jar";  // Full name of the generated .jar/.war archive, ignoring default formatting scheme
-    archiveBaseName = rootProject.name.toLowerCase();  // Only the base `<name>` of the formatting scheme
-    archiveVersion = "";  // Only the `<version>` portion of the formatting scheme
+    archiveBaseName = buildArchiveBaseName;
+    archiveVersion = buildArchiveVersion;
 
     manifest {
         attributes(
