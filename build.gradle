@@ -1,0 +1,412 @@
+/*
+ * To use CLI args in a task/function, append the CLI arg/flag to `-D` or `-P` accordingly:
+ *   - System.getProperty()  == ./gradlew myTask -DmyCliArgName='myCliArgValue'
+ *   - project.getProperty() == ./gradlew myTask -PmyCliArgName='myCliArgValue'
+ * Note: `System.getProperty()` doesn't require a `.hasProperty()` check.
+ */
+
+plugins {
+    id 'java'
+    id 'application'  // Docs: https://docs.gradle.org/current/userguide/application_plugin.html#sec:application_tasks
+    id 'org.openjfx.javafxplugin' version '0.0.13'
+//    id 'org.beryx.jlink' version '2.26.0'
+    id 'groovy'
+    id 'idea'
+}
+
+
+sourceCompatibility = JavaVersion.VERSION_17;
+targetCompatibility = JavaVersion.VERSION_17;
+
+
+ext {
+    osName = System.getProperty("os.name").toLowerCase();
+    osArch = System.getProperty("os.arch").toLowerCase();
+    osVersion = System.getProperty("os.version").toLowerCase();
+
+    if (osName.matches("mac|darwin")) {
+        osName = "osx";
+    }
+
+    /**
+     * We need to download JavaFX manually because it requires OS-specific bindings that can't be packaged
+     * in a .jar file (meaning we can't just add `org.openjfx` as a dependency solely, we need the .jar files from
+     * the OpenJFX website)
+     *
+     * @see <a href="https://gluonhq.com/products/javafx">JavaFX .jar download site</a>
+     * @see <a href="https://mvnrepository.com/artifact/org.openjfx">Gradle dependencies options</a>
+     * @see <a href="https://wiki.openjdk.org/display/OpenJFX/Main">OpenJFX homepage</a>
+     * @see <a href="https://openjfx.io/openjfx-docs">OpenJFX docs</a>
+     * @see <a href="https://jdk.java.net/20">OpenJDK homepage</a>
+     * @see <a href="https://stackoverflow.com/a/70175935/5771107">The "correct" way to create distributable JFX .jar - Platform/OS installer</a>
+     */
+    javafxVersion = "17.0.7"; // "21-ea+5";
+    javafxVersionMajor = javafxVersion.replaceAll("\\D.*", "");  // Only needed if using an early-access version
+    javafxVersionIsEarlyAccess = javafxVersion.matches(".*\\W(ea|EA)\\W.*");
+    javafxVersionDownloadParentPath = javafxVersionIsEarlyAccess ? javafxVersionMajor : javafxVersion;
+    javafxHeadless = Boolean.parseBoolean(System.getProperty("headless", "false"));
+    javafxVersionSuffix = javafxHeadless
+        ? "monocle-" // Monocle is for headless graphics
+        : "";
+    javafxJarDownloadUrl = "https://download2.gluonhq.com/openjfx/${javafxVersionDownloadParentPath}/openjfx-${javafxVersion}_${javafxVersionSuffix}${osName}-${osArch.toString().replaceAll("^.*64", "x64")}_bin-sdk.zip";
+    javafxDownloadDir = "${sourceSets.main.resources.srcDirs.getAt(0)}/javafx"
+    javafxDownloadZipFilePath = "${javafxDownloadDir}/openjfx.zip";
+}
+
+
+/**
+ * Make all (root + sub-) projects use the same dependency registries via `allprojects`.
+ * Alternatively, only the sub-projects can be targeted with `subprojects`.
+ *
+ * Note: If trying to run your own custom plugin in all sub-projects, you must use the
+ * old fashioned `apply from` since `plugins` isn't ready quite yet for handling both
+ * the root project and sub-projects.
+ *
+ * @see <a href="https://stackoverflow.com/questions/12077083/what-is-the-difference-between-allprojects-and-subprojects/12077290#12077290">{@code allprojects} vs {@code subprojects}</a>
+ * @see <a href="https://stackoverflow.com/questions/32352816/what-the-difference-in-applying-gradle-plugin/32353244#32353244">{@code plugins} vs {@code apply from}</a>
+ */
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+        gradlePluginPortal()  // For writing our own Gradle plugins
+    }
+}
+
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+
+// Not needed with current JavaFX setup, but could be helpful if using jLink or similar.
+//java {
+//    modularity.inferModulePath = true
+//}
+
+
+application {
+    // TODO - Not stable. Find a way to actually find the true `main()` method of the source code.
+    File mainClassFile = (File) sourceSets.main.java.find(src -> src.name.toLowerCase().matches(".*(main|driver).*"));
+    String mainClassName = "${rootProject.group}.${mainClassFile.name.replace(".java", "")}";
+
+    mainClass = mainClassName;
+}
+
+
+jar {
+    /**
+     * Usually, when running a .jar file that requires external dependencies (requiring direct installation and/or paths
+     * on the host OS), we need to specify `--module-path <dir-holding-dependency-jars>`
+     * and `--add-modules=<modules-from-modulePath-to-use-while-running-jar>`.
+     *
+     * This applies when using Java >= 11 where JavaFX isn't bundled. For example:
+     *      java --module-path ./libs/javafx-sdk-20.0.1/lib/ --add-modules=javafx.base,javafx.graphics,javafx.controls,javafx.media,javafx.fxml,javafx.swing,javafx.web -jar ./my-app.jar
+     *
+     * Here, we hack the module-path into the generated JAR file via:
+     *  - Add the Gradle `javafxplugin` plugin to automatically handle JavaFX dependencies, helping us run the app, have
+     *    IDE recognition/autocompletion of source code, and ultimately build the final JAR as well.
+     *  - Ensure runtime-classpath includes all files required for the JAR, both source and dependency files.
+     *  - Inject all dependency files into the JAR, even if they usually require native OS installation.
+     *  - (For JavaFX specifically) Make the Main .java file *NOT* extend `javafx.application.Application` but instead
+     *    call `Application.launch(MyApp.class, argsFromMainMethod)` because apparently running a JavaFX Application
+     *    directly is no longer supported with the removal from the default JDK (see: https://stackoverflow.com/a/70175935/5771107).
+     *
+     * The steps above allow us to build and run a final .jar file as long as the OS that runs it is the same as that
+     * which built it (due to JavaFX requiring OS bindings). This hacky method of compiling doesn't allow for official
+     * distribution of the generated JAR file since the OS bindings will be different for each host.
+     * This can be solved with
+     */
+
+    // Default formatting scheme: `<name>-<version>.<extension>`
+    //archiveFileName = "my-app.jar";  // Full name of the generated .jar/.war archive, ignoring default formatting scheme
+    archiveBaseName = rootProject.name.toLowerCase();  // Only the base `<name>` of the formatting scheme
+    archiveVersion = "";  // Only the `<version>` portion of the formatting scheme
+
+    manifest {
+        attributes(
+            'Main-Class': application.mainClass.get(),
+            'Class-Path': configurations.runtimeClasspath.files.collect { it.getName() }.join(' '),
+            'Implementation-Title': archiveBaseName,
+            // Comment Implementation-Version to not add version number to output .jar filename.
+            // See: https://stackoverflow.com/questions/26540059/get-gradle-to-ignore-version-number-in-jar-name
+            //'Implementation-Version': "${gradle.rootProject.version}",
+        )
+    }
+
+    /*
+     * Default to making a fat-jar so the final file can be run without the user needing to download dependencies.
+     * Necessary because JavaFX stopped being included in Java >= 11.
+     * Disable in CLI via `-PfatJar=false`
+     */
+    def createFatJar = project.properties.getOrDefault("fatJar", true);
+
+    if (createFatJar) {
+        // Copy all dependencies needed for runtime into jar but not the compile-time ones since they're only needed for building
+        from {
+            configurations.runtimeClasspath.collect {
+                it.isDirectory() ? it : zipTree(it)
+            }
+        }
+
+        // As mentioned in the `ext.javafx` config's docstring, fat-jars don't play nicely
+        // with `module-path` so exclude the file.
+        // See: https://stackoverflow.com/a/70175935/5771107
+        exclude("module-info.class");
+    }
+
+    // Exclude signature files if running the output .jar file fails due to security reasons on the parent OS
+    //exclude('META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA');
+}
+
+
+javafx {
+    /*
+     * For normal dependencies, we would expect to simply use the format:
+     *      implementation "org.openjfx:javafx:${javafxVersion}"
+     * However, JavaFX contains native OS bindings for the graphics, interactions, etc.
+     * Since JAR files assume the necessary OS bindings were installed during the Java install,
+     * and since JavaFX was removed from that Java install in v11, this means we can't simply
+     * package a JavaFX application JAR by adding JFX dependencies into the generated JAR file.
+     *
+     * Instead, we have to download the JavaFX SDK directly (.jar files and OS bindings), unzip it, and
+     * specify them as a `--module-path`/`--add-modules` in the CLI while running the .jar.
+     *
+     * In the simplest case, if we keep the .jar local and don't publish it, the local JFX installation (which adds
+     * the OS bindings and JAR files) + downloaded JFX jars (done in this `javafx` plugin to simplify the JAR files'
+     * paths for running/IDE interpretation/building/everything) will work symbiotically to allow running of the
+     * final .jar file regardless of how the CLI command is run (e.g. `java -jar my-app.jar`
+     * vs `java --a-million-flags-I-dont-want-to-have-to-pass-every-time-I-run-this -jar my-app.jar`).
+     *
+     * This is described further in the `jar` Gradle task below.
+     * Use `:18.0.2` for Java < 17.
+     */
+
+    version = javafxVersion
+    // Include all modules to allow for painless augmentation and extending later
+    modules = [
+        "javafx.base",
+        "javafx.graphics",
+        "javafx.controls",
+        "javafx.media",
+        "javafx.fxml",
+        "javafx.swing",
+        "javafx.web",
+    ]
+}
+
+
+// The "correct" way to make a distributable JavaFX app.
+// See: https://stackoverflow.com/a/70175935/5771107
+//jlink {
+//    launcher {
+//        name = 'jfxRunner'
+//    }
+//}
+
+
+
+dependencies {
+    // Don't use these for JavaFX since they're unreliable (see `javafx` task above and `jar` task below).
+    //implementation "org.openjfx:javafx:${javafxVersion}"
+
+    // Add manually-downloaded .jar files within the specified dirs as dependencies.
+    //implementation fileTree(dir: 'src/main/resources', include: '**/*.jar')
+}
+
+
+
+gradle.taskGraph.whenReady {
+    tasks.forEach { task ->
+        /**
+         * Fix the problem where there are duplicate files or archives.
+         * Only select tasks that contain `duplicatesStrategy`, lest Gradle throws a "property doesn't exist" error
+         */
+        if (task.hasProperty("duplicatesStrategy")) {
+            task.setProperty("duplicatesStrategy", DuplicatesStrategy.INCLUDE);
+        }
+    }
+}
+
+
+tasks.register("cleanResources", Delete) {
+    delete(javafxDownloadDir);
+}
+
+tasks.register("cleanAll", Delete) {
+    dependsOn("clean", "cleanResources");
+}
+
+
+// If the OS doesn't already have JavaFX installed, this will download the OS bindings + .jar files locally.
+// Not needed since we use the `javafx` Gradle plugin.
+//tasks.compileJava.dependsOn("downloadJavaFX");
+
+
+/*
+ * Alternative to add module-path (dir with runtime JARs) during compile/run execution.
+ * NOT COMPLETE, but is a good starting point.
+ * See:
+ *  - https://stackoverflow.com/a/58723165/5771107
+ *  - https://stackoverflow.com/questions/47222226/how-to-inject-module-declaration-into-jar
+ *  - https://jenkov.com/tutorials/java/modules.html
+ *  - https://stackoverflow.com/a/62490247/5771107
+ *  - https://openjdk.org/jeps/261
+ *  - https://stackoverflow.com/a/30731538/5771107
+ *  - https://www3.ntu.edu.sg/home/ehchua/programming/java/JDK9_Module.html#zz-5.
+ *
+ * Note: The `war` plugin adds a new `providedRuntime` configuration, which is used for adding OS dependencies
+ * to the final output .jar/.war file (e.g. adding the Tomcat JAR so we can run a Spring Boot app/server without
+ * installing Tomcat locally and just the simple CLI command `java -jar my-app.[jw]ar`).
+ * The `jar` plugin doesn't come with this so we have to manually hack our own way into making a simplistic .jar
+ * executable (not that it'd help much in our case anyway since JavaFX requires OS bindings, not just a separate
+ * app, to run our source code).
+ */
+//tasks.compileJava.doFirst {
+//    options.compilerArgs += [
+//        "--module-path",
+//        javafxDownloadDir
+//    ]
+//}
+
+
+tasks.register("downloadJavaFX") {
+    def jfxDir = new File(javafxDownloadDir);
+
+    doLast {
+        if (!jfxDir.exists()) {
+            jfxDir.mkdir();
+        }
+
+        if (
+            jfxDir.listFiles().size() <= 0
+            || (
+                jfxDir.listFiles().size() == 1
+                && ((String) jfxDir.list()[0]).matches(".*\\.(zip|tar\\.\\w+)\$")
+            )
+        ) {
+            downloadFile(javafxDownloadZipFilePath, javafxJarDownloadUrl);
+
+            /*
+             * Copy individual .jar files out to resources dir for easy/direct usage.
+             *
+             *  - Only include .jar files.
+             *  - Ignore empty directories.
+             *  - Flatten file paths via `eachFile {}` closure.
+             *
+             * See:
+             *  - https://stackoverflow.com/questions/40597202/how-to-copy-files-into-flat-directory-in-gradle/45635959#45635959
+             */
+            copy {
+                from zipTree(javafxDownloadZipFilePath).matching {
+                    include "**/*.jar"
+                }
+                into javafxDownloadDir
+                includeEmptyDirs = false
+                eachFile {
+                    path = name
+                }
+            }
+
+            delete javafxDownloadZipFilePath;
+        }
+    }
+}
+
+
+
+def downloadFile(String filePath, String url) {
+    return downloadFile(new File(filePath), url);
+}
+def downloadFile(File file, String url) {
+    println("Downloading file \"${file.name}\" from <${url}>...");
+
+    new URL(url).withInputStream { inStream ->
+        file.withOutputStream {
+            it << inStream
+        }
+    }
+
+    println("Downloaded file \"${file.name}\" from <${url}>.");
+}
+
+
+def cliCmd(String cmd) {
+    Process cmdProcess = [ "bash", "-c", cmd ].execute();
+
+    // Ensure the CLI cmd finishes before attempting to get the output text from the underlying process
+    cmdProcess.waitFor();
+
+    return cmdProcess.text.trim();
+}
+
+
+
+wrapper {
+    distributionType = Wrapper.DistributionType.ALL
+}
+
+tasks.register("wrapperVersion") {
+    doLast {
+        boolean shouldUpgrade = (
+            (
+                project.hasProperty("u")
+                || project.hasProperty("upgrade")
+            )
+            && (String) project.getProperties().get("u") != "false"
+            && (String) project.getProperties().get("upgrade") != "false"
+        );
+
+        /*
+         * CLI cmd:
+         *  - Get Gradle-releases HTML page.
+         *  - Extract only version numbers.
+         *  - Extract only the number from the version (deleting text like "v" from "v1.2.3").
+         *  - Sort in descending order.
+         */
+        String allGradleVersionsResponse = cliCmd("curl -fsSL 'https://gradle.org/releases' | grep -Eo 'v([0-9]+\\.){1,3}[0-9]*\\W' | sed -E 's/^v([0-9\\.]*).?\$/\\1/; s/[^0-9\\.]//g' | sort -Vur");
+        List<String> allGradleVersions = allGradleVersionsResponse.split("\n");
+
+        if (project.hasProperty("l")) {
+            println("Available Gradle versions:\n${allGradleVersions}");
+        }
+
+        if (!shouldUpgrade) {
+            return;
+        }
+
+        String wrapperVersionNumberDefault = allGradleVersions.get(0);
+        String wrapperVersionNumber;
+
+        if (project.hasProperty("v")) {
+            wrapperVersionNumber = project.property("v");
+        } else if (System.hasProperty("v")) {
+            wrapperVersionNumber = System.getProperty("v");
+        }
+
+        assert wrapperVersionNumber != null;
+
+        if (!allGradleVersions.contains(wrapperVersionNumber)) {
+            println("Specified Gradle wrapper version ${wrapperVersionNumber} doesn't exist. Choosing lower version matching ${wrapperVersionNumber}...");
+
+            wrapperVersionNumber = allGradleVersions.stream()
+                .filter(existingVersion -> "${wrapperVersionNumber}".matches("^${existingVersion}.*"))
+                .findFirst()
+                .orElse(wrapperVersionNumberDefault);
+        }
+
+        println("Upgrading Gradle wrapper to v${wrapperVersionNumber}");
+
+        // See:
+        //  - https://docs.gradle.org/current/userguide/gradle_wrapper.html#sec:upgrading_wrapper
+        //  - https://gradle.org/install#with-the-gradle-wrapper
+        cliCmd("./gradlew wrapper --distribution-type=bin --gradle-version=${wrapperVersionNumber}");
+    }
+}
