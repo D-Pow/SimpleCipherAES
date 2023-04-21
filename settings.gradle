@@ -1,0 +1,44 @@
+// Must be defined here instead of build.gradle since settings are loaded first
+// See: https://docs.gradle.org/current/userguide/build_lifecycle.html
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+
+rootProject.name = "SimpleCipherAES"
+
+
+/**
+ * Runs before the project is evaluated, i.e. before `build.gradle` is processed.
+ *
+ * `group` and `version` usually have to be defined in `build.gradle`.
+ * However, we can collect all these settings together here by adding a hook
+ * to inject them right before `build.gradle` is executed and still maintain the
+ * same behavior.
+ * This fixes Gradle's "bug" of violating the principle of separation of concerns
+ * and helps keep code nice and clean.
+ *
+ * @see <a href="https://www.baeldung.com/gradle-build-settings-properties#the-build-in-a-nutshell">Gradle project execution lifecycle (TL;DR)</a>
+ * @see <a href="https://stackoverflow.com/questions/17262856/how-to-set-the-project-name-group-version-plus-source-target-compatibility-in/17263028#17263028">StackOverflow: Assign all settings in one file</a>
+ * @see <a href="https://docs.gradle.org/current/dsl/org.gradle.api.Project.html#Lifecycle:~:text=of%20Gradle%27s%20features.-,Lifecycle,-There%20is%20a">Gradle project execution lifecycle (docs)</a>
+ * @see <a href="https://docs.gradle.org/current/userguide/build_environment.html">Gradle properties (System, Environment, and Project)</a>
+ */
+gradle.beforeProject {
+    gradle.rootProject.setGroup(gradle.rootProject.name.toLowerCase().replaceAll("-", ""));
+
+    String systemVersion = System.getProperty("version", "1.0.0");
+    String projectVersion = gradle.rootProject.property("version");
+    /*
+     * If the version isn't declared in `project.properties`, then Gradle will stupidly return "unspecified"
+     * rather than "" or `null`.
+     * No clue what dev did that, but to make up for their ineptitude, we must do manual parsing/manipulation here.
+     * See:
+     *  - https://stackoverflow.com/questions/17262856/how-to-set-the-project-name-group-version-plus-source-target-compatibility-in
+     */
+    projectVersion = projectVersion.equalsIgnoreCase("unspecified") ? null : projectVersion;
+    String appVersion = projectVersion != null ? projectVersion : systemVersion;
+    gradle.rootProject.setVersion(appVersion);
+}
