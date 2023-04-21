@@ -29,73 +29,68 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class SimpleCipherAES {
     MessageDigest hashFunction;
-    
-    /**
-     * Cipher selection for the processFile method.
-     */
-    public enum CipherType {
-        ENCRYPT, DECRYPT;
+
+    AppProgressText progressText;
+
+    public SimpleCipherAES(AppProgressText progressText) {
+        this.progressText = progressText;
     }
-    
+
     /**
      * Hashes a user-supplied key with SHA-256.
-     * 
+     *
      * @param text
      *          User-supplied key
-     * @return 
+     * @return
      *          The hash of the supplied key; reduced to 128 bits
      */
     public byte[] hashKey(String text) {
         if (text == null || text.equals("")) {
             return null;
         }
-        
+
         byte[] key = null;
         try {
             hashFunction = MessageDigest.getInstance("SHA-256");
             hashFunction.update(text.getBytes("UTF-8"));
             key = hashFunction.digest();
-            
+
             //Key is 256 bits, we want 128 for simplicity
             key = Arrays.copyOf(key, key.length/2);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        
+
         return key;
     }
-    
+
     /**
      * Processes the selected file for encryption or decryption.
      * Functions by reading the file 100 MB at a time, and then
      * encrypting or decrypting it according to the selected option.
-     * 
+     *
      * @param file
      *          File to be encrypted or decrypted
      * @param key
      *          User-given key
      * @param type
      *          If the file being processed will be encrypted or decrypted
-     * @param driver
-     *          GUI that contains the updateProgress method so that the
-     *          user can be updated about the progress of the file
      */
-    public void processFile(File file, byte[] key, CipherType type,
-            SimpleCipherDriverGUI driver){
+    public void processFile(File file, byte[] key, EncryptionDirection type){
         //Delete old encrypted/decrypted files
-        if (type == CipherType.ENCRYPT) {
+        if (type == EncryptionDirection.ENCRYPT) {
             try {
                 String fileName = file.getCanonicalPath();
                 String newName = fileName + ".enc";
                 File newFile = new File(newName);
                 if (newFile.exists()) {
                     newFile.delete();
-                    driver.updateProgress("Old file deleted.");
+                    progressText.updateProgress("Old file deleted.");
                 }
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
-        } else if (type == CipherType.DECRYPT) {
+        } else if (type == EncryptionDirection.DECRYPT) {
             try {
                 //Remove ".enc" extension
                 String oldFilePath = file.getCanonicalPath();
@@ -109,13 +104,13 @@ public class SimpleCipherAES {
                 File newFile = new File(newFilePath);
                 if (newFile.exists()) {
                     newFile.delete();
-                    driver.updateProgress("Old file deleted.");
+                    progressText.updateProgress("Old file deleted.");
                 }
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
         }
-        
+
         Thread fileProcess = new Thread(){
             @Override
             public void run() {
@@ -141,7 +136,7 @@ public class SimpleCipherAES {
                             //encrypted chunk will be 100000016 instead of 100000000.
                             //Thus, decryption will need to process a larger chunk
                             //than 100 MB
-                            if (type == CipherType.DECRYPT) {
+                            if (type == EncryptionDirection.DECRYPT) {
                                 //When encrypted, 100 MB becomes 100.000016 MB
                                 //Thus, decryption must handle the larger filesize
                                 //in order to make a 100 MB sized unencrypted file.
@@ -157,18 +152,18 @@ public class SimpleCipherAES {
                         totalBytesRead += bytesRead;
 
                         //Encrypt or decrypt byte array
-                        if (type == CipherType.ENCRYPT) {
+                        if (type == EncryptionDirection.ENCRYPT) {
                             encryptAndSave(bytes, key, file);
-                        } else if (type == CipherType.DECRYPT) {
+                        } else if (type == EncryptionDirection.DECRYPT) {
                             decryptAndSave(bytes, key, file);
                         }
-                        
+
                         //Let the user know what's happening
-                        driver.updateProgress(totalBytesRead, fileSize);
+                        progressText.updateProgress(totalBytesRead, fileSize);
                         System.out.println(totalBytesRead + " completed so far.");
                         if (totalBytesRead == fileSize) {
                             System.out.println("Done!");
-                            driver.updateProgress("File Completed!");
+                            progressText.updateProgress("File Completed!");
                         }
                     }
                     //try-with-resources does not need to be closed
@@ -179,16 +174,16 @@ public class SimpleCipherAES {
         };
         fileProcess.start();
     }
-    
+
     /**
      * Encrypts a byte array using a given key, then saves the encryption
      * to a new file with a similar name to the original file.
-     * 
+     *
      * @param message
      *          Byte array to be encrypted
      * @param key
      *          User-given key
-     * @param file 
+     * @param file
      *          Old, unencrypted file to be encrypted; used to make a file with
      *          a similar name
      */
@@ -207,7 +202,7 @@ public class SimpleCipherAES {
                 BadPaddingException ex) {
             ex.printStackTrace();
         }
-        
+
         //Save data to a file
         OutputStream out = null;
         try {
@@ -223,16 +218,16 @@ public class SimpleCipherAES {
             ex.printStackTrace();
         }
     }
-    
+
     /**
      * Encrypts a byte array using a given key, then saves the encryption
      * to a new file with a similar name to the original file.
-     * 
+     *
      * @param message
      *          Byte array to be decrypted
      * @param key
      *          User-given key
-     * @param file 
+     * @param encryptedFile
      *          Old file that was previously encrypted; used to make a file with
      *          a similar name
      */
@@ -251,7 +246,7 @@ public class SimpleCipherAES {
                 BadPaddingException ex) {
             ex.printStackTrace();
         }
-        
+
         //Save data to a file
         OutputStream out = null;
         try {
@@ -264,7 +259,7 @@ public class SimpleCipherAES {
             //Add " [decrypted]" just before the file's real extension
             newFilePath = newFilePath.substring(0, indexOfExtension) + " [decrypted]"
                     + extension;
-            
+
             out = new BufferedOutputStream(
                     new FileOutputStream(newFilePath, true));
             if (decryptedBytes != null) {
@@ -275,5 +270,5 @@ public class SimpleCipherAES {
             ex.printStackTrace();
         }
     }
-    
+
 }
