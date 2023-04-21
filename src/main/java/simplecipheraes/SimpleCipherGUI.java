@@ -1,6 +1,5 @@
 package simplecipheraes;
 
-import simplecipheraes.SimpleCipherAES.CipherType;
 import java.io.File;
 import javafx.application.Application;
 import javafx.event.ActionEvent;
@@ -13,11 +12,7 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
-import javafx.scene.text.Font;
-import javafx.scene.text.Text;
-import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import javax.swing.JFileChooser;
 import javax.swing.UIManager;
@@ -33,103 +28,97 @@ import javax.swing.filechooser.FileNameExtensionFilter;
  *
  * @author dPow
  */
-public class SimpleCipherDriverGUI extends Application {
-    Text progress;
+public class SimpleCipherGUI extends Application {
+    AppProgressText progressText = new AppProgressText();
     String filePath;
-    
-    public SimpleCipherDriverGUI() {
+
+    public SimpleCipherGUI() {
         //set initial file-open dialog to current directory
         this.filePath = ".";
     }
 
     @Override
     public void start(Stage stage) throws Exception {
-        SimpleCipherAES cipher = new SimpleCipherAES();
-        
+        SimpleCipherAES cipher = new SimpleCipherAES(this.progressText);
+
         //Password field
         PasswordField textField = new PasswordField();
-        
+
         //Add buttons and their functions
         Button encrypt = new Button("Encrypt file");
         encrypt.setOnAction((ActionEvent event) -> {
             byte[] key = cipher.hashKey(textField.getText());
             if (key == null) { //Prevent encrypting with blank key
-                updateProgress("Please type in a password.");
+                this.progressText.updateProgress("Please type in a password.");
             } else {
                 File file = openFileExplorer("Encrypt");
                 if (file == null) {
-                    updateProgress("Something went wrong with selecting your file.");
+                    this.progressText.updateProgress("Something went wrong with selecting your file.");
                 } else {
                     //Remove password from text field to prevent people from peeking
                     //over your shoulder
                     textField.setText("");
                     //Let user know the file is being loaded
-                    updateProgress("Loading...");
+                    this.progressText.updateProgress("Loading...");
                     //Process file
-                    cipher.processFile(file, key, CipherType.ENCRYPT, this);
+                    cipher.processFile(file, key, EncryptionDirection.ENCRYPT);
                 }
             }
         });
-        
+
         Button decrypt = new Button("Decrypt file");
         decrypt.setOnAction((ActionEvent event) -> {
             byte[] key = cipher.hashKey(textField.getText());
             if (key == null) {
-                updateProgress("Please type in a password.");
+                this.progressText.updateProgress("Please type in a password.");
             } else {
                 File file = openFileExplorer("Decrypt");
                 if (file == null) {
-                    updateProgress("Something went wrong with selecting your file.");
+                    this.progressText.updateProgress("Something went wrong with selecting your file.");
                 } else {
                     //Remove password from text field to prevent people from peeking
                     //over your shoulder
                     textField.setText("");
                     //Let user know the file is being loaded
-                    updateProgress("Loading...");
+                    this.progressText.updateProgress("Loading...");
                     //Process file
-                    cipher.processFile(file, key, CipherType.DECRYPT, this);
+                    cipher.processFile(file, key, EncryptionDirection.DECRYPT);
                 }
             }
         });
-        
+
         addEnterListener(encrypt);
         addEnterListener(decrypt);
-        
-        progress = new Text("Type in a password to encrypt or decrypt");
-        Font font = new Font("vernanda", 16);
-        progress.setFont(font);
-        progress.setFill(Color.BLACK);
-        progress.setTextAlignment(TextAlignment.CENTER);
-        
+
         VBox vbox = new VBox();
         vbox.setPadding(new Insets(50, 10, 0, 10));
         vbox.setSpacing(10);
         vbox.setAlignment(Pos.CENTER);
-        vbox.getChildren().addAll(textField, encrypt, decrypt, progress);
-        
+        vbox.getChildren().addAll(textField, encrypt, decrypt, progressText.getSceneElement());
+
         Scene scene = new Scene(vbox, Paint.valueOf("Blue"));
-        
+
         stage.setScene(scene);
         stage.setTitle("Encrypt and Decrypt your Files");
         stage.setWidth(400);
         stage.setHeight(400);
         stage.setResizable(false);
-        
+
         stage.show();
     }
-    
+
     @Override
     public void stop() {
         System.exit(0);
     }
-    
+
     public static void main(String[] args) {
         launch(args);
     }
-    
+
     /**
      * Adds a keyListener so that when Enter is pressed, it fires the button.
-     * 
+     *
      * @param button
      *          Button to which a keyListener is added.
      */
@@ -144,18 +133,18 @@ public class SimpleCipherDriverGUI extends Application {
             }
         });
     }
-    
+
     /**
      * Opens a JFileChooser with the supplied text on the action button.
-     * 
-     * @param buttonText 
+     *
+     * @param buttonText
      *          Text to show on the action button
-     * @return 
+     * @return
      *          File selected that will be encrypted or decrypted
      */
     public File openFileExplorer(String buttonText) {
         JFileChooser fileChooser = new JFileChooser(this.filePath){
-            
+
             @Override
             public void approveSelection() {
                 File fileChoice = this.getSelectedFile();
@@ -167,28 +156,28 @@ public class SimpleCipherDriverGUI extends Application {
                 }
             }
         };
-        
+
         //First, change to a nice LookAndFeel
         try {
             //UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
             UIManager.setLookAndFeel("com.sun.java.swing.plaf.nimbus.NimbusLookAndFeel");
-        } catch (ClassNotFoundException | InstantiationException | 
+        } catch (ClassNotFoundException | InstantiationException |
                 IllegalAccessException | UnsupportedLookAndFeelException ex) {
             System.err.println(ex.getClass());
         }
-        
+
         //Update the JFileChooser's look and feel
         fileChooser.updateUI();
-        
+
         //Allow the JFileChooser to see files and directories instead of only files
         fileChooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
-        
+
         //Set the decryption to only show ".enc" files
         if (buttonText.equals("Decrypt")) {
             FileNameExtensionFilter filter = new FileNameExtensionFilter("Encrypted files (.enc)", "enc");
             fileChooser.setFileFilter(filter);
         }
-        
+
         //Encrypt or decryptFile the selected file
         int fileChoice = fileChooser.showDialog(null, buttonText);
         if (fileChoice == JFileChooser.APPROVE_OPTION) {
@@ -198,53 +187,8 @@ public class SimpleCipherDriverGUI extends Application {
                 return selectedFile;
             }
         }
-        
+
         return null;
     }
-    
-    /**
-     * Updates the progress of the encryption/decryption, and displays
-     * it on the screen.
-     * 
-     * @param completedSize 
-     *          Number of bytes processed in the encryption/decryption
-     *          methods
-     * @param fileSize
-     *          Size of the file, in bytes
-     */
-    public void updateProgress(double completedSize, double fileSize) {
-        double orderOfMagnitude;
-        String suffix;
-        if (fileSize > 1000000000) {
-            orderOfMagnitude = 1000000000.0; //Gigabyte
-            suffix = "GB";
-        } else if (fileSize > 1000000) {
-            orderOfMagnitude = 1000000.0; //Megabyte
-            suffix = "MB";
-        } else if (fileSize > 1000) {
-            orderOfMagnitude = 1000.0; //Kilobyte
-            suffix = "KB";
-        } else {
-            orderOfMagnitude = 1.0; //Byte
-            suffix = "B";
-        }
-        
-        //Round numbers to the nearest hundredth
-        double completedSizeDisplayed = ((double)Math.round(completedSize/orderOfMagnitude*100))/100;
-        double fileSizeDisplayed = ((double)Math.round(fileSize/orderOfMagnitude*100))/100;
-        
-        progress.setText("Running...\n" + completedSizeDisplayed + "/" +
-                fileSizeDisplayed + " " + suffix + " completed");
-    }
-    
-    /**
-     * Overloaded message to display text instead of a fraction.
-     * 
-     * @param message 
-     *          Text to display
-     */
-    public void updateProgress(String message) {
-        progress.setText(message);
-    }
-    
+
 }
