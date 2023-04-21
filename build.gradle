@@ -391,8 +391,6 @@ tasks.register("wrapperVersion") {
             wrapperVersionNumber = System.getProperty("v");
         }
 
-        assert wrapperVersionNumber != null;
-
         if (!allGradleVersions.contains(wrapperVersionNumber)) {
             println("Specified Gradle wrapper version ${wrapperVersionNumber} doesn't exist. Choosing lower version matching ${wrapperVersionNumber}...");
 
@@ -401,6 +399,8 @@ tasks.register("wrapperVersion") {
                 .findFirst()
                 .orElse(wrapperVersionNumberDefault);
         }
+
+        assert wrapperVersionNumber != null;
 
         println("Upgrading Gradle wrapper to v${wrapperVersionNumber}");
 
