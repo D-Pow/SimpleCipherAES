@@ -57,7 +57,7 @@ ext {
         ? "monocle-" // Monocle is for headless graphics
         : "";
     javafxJarDownloadUrl = "https://download2.gluonhq.com/openjfx/${javafxVersionDownloadParentPath}/openjfx-${javafxVersion}_${javafxVersionSuffix}${osName}-${osArch.toString().replaceAll("^.*64", "x64")}_bin-sdk.zip";
-    javafxDownloadDir = "${sourceSets.main.resources.srcDirs.getAt(0)}/javafx"
+    javafxDownloadDir = "${sourceSets.main.resources.srcDirs.getAt(0)}/javafx";
     javafxDownloadZipFilePath = "${javafxDownloadDir}/openjfx.zip";
 }
 
@@ -111,23 +111,29 @@ application {
 
 javafx {
     /*
-     * For normal dependencies, we would expect to simply use the format:
+     * For normal dependencies (if not using this `javafx` plugin), we would expect to simply use the format:
      *      implementation "org.openjfx:javafx:${javafxVersion}"
-     * However, JavaFX contains native OS bindings for the graphics, interactions, etc.
-     * Since JAR files assume the necessary OS bindings were installed during the Java install,
-     * and since JavaFX was removed from that Java install in v11, this means we can't simply
-     * package a JavaFX application JAR by adding JFX dependencies into the generated JAR file.
      *
-     * Instead, we have to download the JavaFX SDK directly (.jar files and OS bindings), unzip it, and
+     * Though, JavaFX contains native OS bindings for the graphics, interactions, etc.
+     * Since JAR files assume the necessary OS bindings were installed during the OpenJFX install,
+     * and since JavaFX was removed from that Java install in v11, this means we (likely) can't simply
+     * package a JavaFX application JAR by adding JFX dependencies into the generated JAR file.
+     * Instead, we would need to download the JavaFX SDK directly (.jar files and OS bindings), unzip it, and
      * specify them as a `--module-path`/`--add-modules` in the CLI while running the .jar.
      *
-     * In the simplest case, if we keep the .jar local and don't publish it, the local JFX installation (which adds
-     * the OS bindings and JAR files) + downloaded JFX jars (done in this `javafx` plugin to simplify the JAR files'
-     * paths for running/IDE interpretation/building/everything) will work symbiotically to allow running of the
-     * final .jar file regardless of how the CLI command is run (e.g. `java -jar my-app.jar`
-     * vs `java --a-million-flags-I-dont-want-to-have-to-pass-every-time-I-run-this -jar my-app.jar`).
+     * To fix this, we have a few options:
      *
-     * This is described further in the `jar` Gradle task below.
+     * 1. In the simplest case, if we have OpenJFX installed on the OS, the local JFX installation (which adds
+     *    the OS bindings and JAR files) would work as long as its set in the PATH.
+     * 2. We could download the OpenJFX .jar files and OS bindings via our custom `downloadJavaFX()` Gradle util,
+     *    and use that via:
+     *    `java --module-path=./path/to/javafx-unzipped-dir/ --add-modules=javafx.base,javafx.graphics,etc -jar my-app.jar`
+     * 3. If we use this `javafx` plugin to download simplify the JFX .jar files, which also sets them into paths
+     *    for running/IDE interpretation/building/everything, we might possibly be able to run the final app output .jar
+     *    regardless of how the CLI command is run (e.g. `java -jar my-app.jar` without the `--module-path`/`--add-modules`
+     *    flags).
+     *    This needs to be verified, but theoretically, it's possible this would solve the JFX issues described above.
+     *
      * Use `:18.0.2` for Java < 17.
      */
 
@@ -143,6 +149,13 @@ javafx {
         "javafx.web",
     ]
 }
+// The "correct" way to make a distributable JavaFX app.
+// See: https://stackoverflow.com/a/70175935/5771107
+//jlink {
+//    launcher {
+//        name = 'jfxRunner'
+//    }
+//}
 
 
 jar {
@@ -184,8 +197,9 @@ jar {
     }
 
     /*
-     * Default to making a fat-jar so the final file can be run without the user needing to download dependencies.
-     * Necessary because JavaFX stopped being included in Java >= 11.
+     * Default to making a fat-jar so the final file can be run without the user needing to download dependencies and
+     * specify the modules via `--module-path`/`--add-modules`.
+     * This makes running the final app-output .jar file easier.
      * Disable in CLI via `-PfatJar=false`
      */
     def createFatJar = project.properties.getOrDefault("fatJar", true);
@@ -207,15 +221,6 @@ jar {
     // Exclude signature files if running the output .jar file fails due to security reasons on the parent OS
     //exclude('META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA');
 }
-
-
-// The "correct" way to make a distributable JavaFX app.
-// See: https://stackoverflow.com/a/70175935/5771107
-//jlink {
-//    launcher {
-//        name = 'jfxRunner'
-//    }
-//}
 
 
 
