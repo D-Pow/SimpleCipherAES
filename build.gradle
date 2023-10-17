@@ -56,6 +56,9 @@ ext {
     javafxVersionSuffix = javafxHeadless
         ? "monocle-" // Monocle is for headless graphics
         : "";
+    // e.g.
+    //  https://download2.gluonhq.com/openjfx/17.0.7/openjfx-17.0.7_linux-x64_bin-sdk.zip
+    //  https://download2.gluonhq.com/openjfx/21/openjfx-21-ea+5_linux-x64_bin-sdk.zip
     javafxJarDownloadUrl = "https://download2.gluonhq.com/openjfx/${javafxVersionDownloadParentPath}/openjfx-${javafxVersion}_${javafxVersionSuffix}${osName}-${osArch.toString().replaceAll("^.*64", "x64")}_bin-sdk.zip";
     javafxDownloadDir = "${sourceSets.main.resources.srcDirs.getAt(0)}/javafx";
     javafxDownloadZipFilePath = "${javafxDownloadDir}/openjfx.zip";
